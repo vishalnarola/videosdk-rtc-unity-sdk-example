@@ -1,11 +1,10 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using live.videosdk;
-using UnityEngine.Android;
-using TMPro;
 using EasyUI.Toast;
+using live.videosdk;
+using System;
+using System.Collections.Generic;
+using TMPro;
+using UnityEngine;
+using UnityEngine.Android;
 public class GameManager : MonoBehaviour
 {
     private bool micToggle;
@@ -13,38 +12,36 @@ public class GameManager : MonoBehaviour
 
     [SerializeField] GameObject _videoSurfacePrefab;
     [SerializeField] Transform _parent;
-    [SerializeField] GameObject _meetControlls;
-    [SerializeField] GameObject _meetCreateActivity;
-    [SerializeField] GameObject _meetJoinActivity;
+    [SerializeField] GameObject _meetingJoinPanel;
+    [SerializeField] GameObject _meetingPanel;
 
     private VideoSurface _localParticipant;
-    private Meeting videosdk;
+    private Meeting meeting;
     private readonly string _token = "YOUR_TOKEN";
-    
-    [SerializeField] TMP_Text _meetIdTxt;
-    [SerializeField] TMP_InputField _meetIdInputField;
+
+    [SerializeField] TMP_Text _meetingIdTxt;
+    [SerializeField] TMP_InputField _meetingIdInputField;
 
     private List<VideoSurface> _participantList = new List<VideoSurface>();
 
     private void Awake()
     {
-        _meetControlls.SetActive(false);
-        _meetCreateActivity.SetActive(false);
-        _meetJoinActivity.SetActive(false);
-        RequestForPermission(Permission.Camera);
+        _meetingPanel.SetActive(false);
+        _meetingJoinPanel.SetActive(false);
+        // Request for Camera and Mic Permission
+        RequestForPermission();
     }
     void Start()
     {
-        videosdk = Meeting.GetMeetingObject();
+        meeting = Meeting.GetMeetingObject();
 
-        videosdk.OnCreateMeetingIdCallback += OnCreateMeet;
-        videosdk.OnParticipantJoinedCallback += OnParticipantJoined;
-        videosdk.OnParticipantLeftCallback += OnParticipantLeft;
-        videosdk.OnCreateMeetingIdFailedCallback += OnCreateMeetFailed;
-        videosdk.OnMeetingStateChangedCallback += OnMeetingStateChanged;
-        videosdk.OnErrorCallback += OnError;
-        _meetCreateActivity.SetActive(true);
-        _meetJoinActivity.SetActive(true);
+        meeting.OnCreateMeetingIdCallback += OnCreateMeeting;
+        meeting.OnParticipantJoinedCallback += OnParticipantJoined;
+        meeting.OnParticipantLeftCallback += OnParticipantLeft;
+        meeting.OnCreateMeetingIdFailedCallback += OnCreateMeetingFailed;
+        meeting.OnMeetingStateChangedCallback += OnMeetingStateChanged;
+        meeting.OnErrorCallback += OnError;
+        _meetingJoinPanel.SetActive(true);
     }
 
     private void OnError(Error error)
@@ -53,25 +50,24 @@ public class GameManager : MonoBehaviour
         Toast.Show($"OnError: Error-Code: {error.Code} Message: {error.Message}", 3f, Color.red, ToastPosition.MiddleCenter);
     }
 
-    private void OnParticipantJoined(IParticipant obj)
-    {   
-        Debug.Log($"On Pariticpant Joined: " + obj.ToString());
-        Toast.Show($"<color=green>PariticpantJoined: </color> {obj.ToString()}", 1f, ToastPosition.TopCenter);
-        VideoSurface participant = Instantiate(_videoSurfacePrefab, _parent.transform).GetComponentInChildren<VideoSurface>();
-        participant.SetVideoSurfaceType(VideoSurfaceType.RawImage);//For raw Image
-        participant.SetParticipant(obj);
-        participant.SetEnable(true);
-        _participantList.Add(participant);
-        if (obj.IsLocal)
+    private void OnParticipantJoined(IParticipant participant)
+    {
+        Debug.Log($"On Pariticpant Joined: " + participant.ToString());
+        Toast.Show($"<color=green>PariticpantJoined: </color> {participant.ToString()}", 1f, ToastPosition.TopCenter);
+        VideoSurface surface = Instantiate(_videoSurfacePrefab, _parent.transform).GetComponentInChildren<VideoSurface>();
+        surface.SetVideoSurfaceType(VideoSurfaceType.RawImage);//For raw Image
+        surface.SetParticipant(participant);
+        surface.SetEnable(true);
+        _participantList.Add(surface);
+        if (participant.IsLocal)
         {
-            _localParticipant = participant;
-             _localParticipant.OnStreamEnableCallback += OnStreamEnable;
-             _localParticipant.OnStreamDisableCallback += OnStreamDisable;
-            _meetIdTxt.text = videosdk.MeetingID;
-            _meetIdInputField.text = string.Empty;
-            _meetCreateActivity.SetActive(false);
-            _meetJoinActivity.SetActive(false);
-            _meetControlls.SetActive(true);
+            _localParticipant = surface;
+            _localParticipant.OnStreamEnableCallback += OnStreamEnable;
+            _localParticipant.OnStreamDisableCallback += OnStreamDisable;
+            _meetingIdTxt.text = meeting.MeetingID;
+            _meetingIdInputField.text = string.Empty;
+            _meetingJoinPanel.SetActive(false);
+            _meetingPanel.SetActive(true);
 
         }
     }
@@ -90,39 +86,39 @@ public class GameManager : MonoBehaviour
         micToggle = _localParticipant.MicEnabled;
     }
 
-    private void OnParticipantLeft(IParticipant obj)
+    private void OnParticipantLeft(IParticipant participant)
     {
-        Debug.Log($"On Pariticpant Left: " + obj.ToString());
-        Toast.Show($"<color=yellow>PariticpantLeft: </color> {obj.ToString()}", 2f, ToastPosition.TopCenter);
-        if (obj.IsLocal)
+        Debug.Log($"On Pariticpant Left: " + participant.ToString());
+        Toast.Show($"<color=yellow>PariticpantLeft: </color> {participant.ToString()}", 2f, ToastPosition.TopCenter);
+        if (participant.IsLocal)
         {
             OnLeave();
         }
         else
         {
-            VideoSurface participant = null;
+            // For remote participants, find the VideoSurface object and destroy it
+            VideoSurface surfaceToRemove = null;
             for (int i = 0; i < _participantList.Count; i++)
             {
-                if(obj.ParticipantId== _participantList[i].Id)
+                if (participant.ParticipantId == _participantList[i].Id)
                 {
-                    participant = _participantList[i];
+                    surfaceToRemove = _participantList[i];
                     _participantList.RemoveAt(i);
                     break;
                 }
-                
+
             }
-            if(participant!=null)
+            if (surfaceToRemove != null)
             {
-                Destroy(participant.transform.parent.gameObject);
+                Destroy(surfaceToRemove.transform.parent.gameObject);
             }
         }
     }
 
     private void OnLeave()
     {
-        _meetCreateActivity.SetActive(true);
-        _meetJoinActivity.SetActive(true);
-        _meetControlls.SetActive(false);
+        _meetingJoinPanel.SetActive(true);
+        _meetingPanel.SetActive(false);
         camToggle = true;
         micToggle = true;
         for (int i = 0; i < _participantList.Count; i++)
@@ -130,27 +126,29 @@ public class GameManager : MonoBehaviour
             Destroy(_participantList[i].transform.parent.gameObject);
         }
         _participantList.Clear();
-        _meetIdTxt.text = "VideoSDK Unity Demo";
+        _meetingIdTxt.text = "VideoSDK Unity Demo";
     }
 
-    private void OnCreateMeet(string meetId)
+    private void OnCreateMeeting(string meetingId)
     {
-        _meetIdTxt.text = meetId;
-        videosdk.Join(_token, meetId, "User", true, true);
+        _meetingIdTxt.text = meetingId;
+        meeting.Join(_token, meetingId, "User", true, true);
     }
 
     public void CreateMeeting()
     {
         Debug.Log("User Request for Create meet-ID");
-        _meetCreateActivity.SetActive(false);
-        _meetJoinActivity.SetActive(false);
-        videosdk.CreateMeetingId(_token);
+
+        // Alert the user if microphone or camera permission is not granted.
+        AlertNoPermission();
+
+        _meetingJoinPanel.SetActive(false);
+        meeting.CreateMeetingId(_token);
     }
 
-    private void OnCreateMeetFailed(string obj)
+    private void OnCreateMeetingFailed(string obj)
     {
-        _meetCreateActivity.SetActive(true);
-        _meetJoinActivity.SetActive(true);
+        _meetingJoinPanel.SetActive(true);
         Debug.LogError(obj);
         Toast.Show($"OnCreateMeetFailed: {obj}", 1f, Color.red, ToastPosition.TopCenter);
     }
@@ -161,13 +159,16 @@ public class GameManager : MonoBehaviour
         Debug.Log($"MeetingStateChanged: {obj}");
     }
 
-    public void JoinMeet()
+    public void JoinMeeting()
     {
-        if (string.IsNullOrEmpty(_meetIdInputField.text)) return;
+        if (string.IsNullOrEmpty(_meetingIdInputField.text)) return;
+
+        // Alert the user if microphone or camera permission is not granted.
+        AlertNoPermission();
 
         try
         {
-            videosdk.Join(_token, _meetIdInputField.text, "User", true, false);
+            meeting.Join(_token, _meetingIdInputField.text, "User", true, false);
         }
         catch (Exception ex)
         {
@@ -190,7 +191,7 @@ public class GameManager : MonoBehaviour
 
     public void LeaveMeeting()
     {
-        videosdk?.Leave();
+        meeting?.Leave();
     }
 
     private void OnApplicationPause(bool pause)
@@ -257,34 +258,40 @@ public class GameManager : MonoBehaviour
 
     private void OnPermissionGranted(string permissionName)
     {
-        if (Permission.HasUserAuthorizedPermission(Permission.Microphone) && Permission.HasUserAuthorizedPermission(Permission.Camera))
-        {
-            return;
-        }
-        RequestForPermission(Permission.Microphone);
-
+        // Debug.Log($"{permissionName} allowed by the user.");
     }
 
     private void OnPermissionDenied(string permissionName)
     {
-       // Debug.LogError($"VideoSDK can't Initialize {permissionName} Denied");
+        // Debug.LogError($"VideoSDK can't Initialize {permissionName} Denied");
 
     }
 
     private void OnPermissionDeniedAndDontAskAgain(string permissionName)
     {
-       // Debug.LogError($"VideoSDK can't Initialize {permissionName} Denied And DontAskAgain");
+        // Debug.LogError($"VideoSDK can't Initialize {permissionName} Denied And DontAskAgain");
+    }
+
+    private void AlertNoPermission()
+    {
+        if (Application.platform == RuntimePlatform.Android)
+        {
+            if (!(Permission.HasUserAuthorizedPermission(Permission.Microphone) && Permission.HasUserAuthorizedPermission(Permission.Camera)))
+            {
+                Toast.Show($"You have not granted microphone or camera permission.", 3f, Color.red, ToastPosition.TopCenter);
+            }
+        }
     }
 
 
-    private void RequestForPermission(string permission)
+    private void RequestForPermission()
     {
         if (Application.platform == RuntimePlatform.Android)
         {
             if (Permission.HasUserAuthorizedPermission(Permission.Microphone) && Permission.HasUserAuthorizedPermission(Permission.Camera))
             {
-                // The user authorized use of the microphone.
-                OnPermissionGranted("");
+                // The user authorized use of the microphone and camera.
+                OnPermissionGranted(string.Empty);
             }
             else
             {
@@ -292,7 +299,7 @@ public class GameManager : MonoBehaviour
                 callbacks.PermissionDenied += OnPermissionDenied;
                 callbacks.PermissionGranted += OnPermissionGranted;
                 callbacks.PermissionDeniedAndDontAskAgain += OnPermissionDeniedAndDontAskAgain;
-                Permission.RequestUserPermission(permission, callbacks);
+                Permission.RequestUserPermissions(new string[] { Permission.Microphone, Permission.Camera }, callbacks);
             }
         }
 

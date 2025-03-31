@@ -253,11 +253,10 @@
       "url": "https://packages.unity.com"
     },
     "live.videosdk.unity": {
-      "version": "https://github.com/videosdk-live/videosdk-rtc-unity-sdk.git",
+      "version": "file:D:/Unity/GitProject/VideoSdk/videosdk-rtc-unity-sdk",
       "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "cebe19c3313146231236e9c59b5257d82a745135"
+      "source": "local",
+      "dependencies": {}
     },
     "com.unity.modules.ai": {
       "version": "1.0.0",
