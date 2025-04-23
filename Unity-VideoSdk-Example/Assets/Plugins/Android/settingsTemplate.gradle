@@ -16,7 +16,7 @@ dependencyResolutionManagement {
         **ARTIFACTORYREPOSITORY**
         google()
         mavenCentral()
-         jcenter()
+        jcenter()
          maven {
             url = uri("https://maven.aliyun.com/repository/jcenter")
         }

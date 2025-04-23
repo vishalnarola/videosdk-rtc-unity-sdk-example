@@ -1,0 +1,43 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+StructuredBuffer<uint> NV21Buffer;
+RWTexture2D<float4> Result;
+int Width;
+int Height;
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+
+     if (id.x >= Width || id.y >= Height) return;
+
+    int x = id.x;
+    int y = id.y;
+
+    int frameSize = Width * Height;
+    int yIndex = y * Width + x;
+    int uvIndex = frameSize + (y >> 1) * Width + (x & ~1);
+
+    float Y = NV21Buffer[yIndex] & 0xFF;
+    float V = NV21Buffer[uvIndex] & 0xFF;
+    float U = NV21Buffer[uvIndex + 1] & 0xFF;
+
+    Y = max(Y, 16.0);
+    Y = 1.164 * (Y - 16.0);
+    U = U - 128.0;
+    V = V - 128.0;
+
+    float R = Y + 1.596 * V;
+    float G = Y - 0.392 * U - 0.813 * V;
+    float B = Y + 2.017 * U;
+
+    Result[int2(x, y)] = float4(
+        clamp(R / 255.0, 0.0, 1.0),
+        clamp(G / 255.0, 0.0, 1.0),
+        clamp(B / 255.0, 0.0, 1.0),
+        1.0
+    );
+}

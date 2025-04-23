@@ -85,6 +85,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 37f491859e773574ab98dada067c6267, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  flipTexture: 0
+  nv21Shader: {fileID: 7200000, guid: 6684061ed9a23c942bade57d4716a682, type: 3}
 --- !u!1 &7281604078580510167
 GameObject:
   m_ObjectHideFlags: 0

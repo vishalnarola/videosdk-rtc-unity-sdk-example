@@ -2,22 +2,46 @@ using EasyUI.Toast;
 using live.videosdk;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Android;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
 public class GameManager : MonoBehaviour
 {
-    private bool micToggle;
-    private bool camToggle;
+    private bool _micToggle;
+    private bool micToggle
+    {
+        get => _micToggle;
+        set
+        {
+            micBtn.image.color = value ? Color.green : Color.red;
+            _micToggle = value;
+        }
+    }
+    private bool _camToggle;
+    private bool camToggle
+    {
+        get => _camToggle;
+        set
+        {
+            camBtn.image.color = value ? Color.green : Color.red;
+            _camToggle = value;
+        }
+    }
 
     [SerializeField] GameObject _videoSurfacePrefab;
     [SerializeField] Transform _parent;
     [SerializeField] GameObject _meetingJoinPanel;
     [SerializeField] GameObject _meetingPanel;
 
+    [SerializeField] Button micBtn, camBtn;
+
     private VideoSurface _localParticipant;
     private Meeting meeting;
-    private readonly string _token = "YOUR_TOKEN";
+    private readonly string _token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcGlrZXkiOiI0Y2NhMmM3YS0wYmM2LTQzMmQtYTA5Zi1kZTVjNzJlNTY0YzgiLCJwZXJtaXNzaW9ucyI6WyJhbGxvd19qb2luIl0sImlhdCI6MTc0NDY4ODEwNCwiZXhwIjoxNzQ3MjgwMTA0fQ.jJT8LF724vmbd0fCU8GeHoxXSqmx9qf-TFlO3yO6s2Q";
 
     [SerializeField] TMP_Text _meetingIdTxt;
     [SerializeField] TMP_InputField _meetingIdInputField;
@@ -40,8 +64,10 @@ public class GameManager : MonoBehaviour
         meeting.OnParticipantLeftCallback += OnParticipantLeft;
         meeting.OnCreateMeetingIdFailedCallback += OnCreateMeetingFailed;
         meeting.OnMeetingStateChangedCallback += OnMeetingStateChanged;
+        meeting.OnFetchAudioDeviceCallback += OnFetchAudioDevice;
         meeting.OnErrorCallback += OnError;
         _meetingJoinPanel.SetActive(true);
+
     }
 
     private void OnError(Error error)
@@ -72,14 +98,14 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private void OnStreamDisable(string kind)
+    private void OnStreamDisable(StreamKind kind)
     {
         Debug.Log($"OnStreamDisable {kind}");
         camToggle = _localParticipant.CamEnabled;
         micToggle = _localParticipant.MicEnabled;
     }
 
-    private void OnStreamEnable(string kind)
+    private void OnStreamEnable(StreamKind kind)
     {
         Debug.Log($"OnStreamEnable {kind}");
         camToggle = _localParticipant.CamEnabled;
@@ -132,7 +158,8 @@ public class GameManager : MonoBehaviour
     private void OnCreateMeeting(string meetingId)
     {
         _meetingIdTxt.text = meetingId;
-        meeting.Join(_token, meetingId, "User", true, true);
+        Debug.Log($"OnCreateMeeting {meetingId}");
+        meeting.Join(_token, meetingId, "User", true, false);
     }
 
     public void CreateMeeting()
@@ -153,10 +180,10 @@ public class GameManager : MonoBehaviour
         Toast.Show($"OnCreateMeetFailed: {obj}", 1f, Color.red, ToastPosition.TopCenter);
     }
 
-    private void OnMeetingStateChanged(string obj)
+    private void OnMeetingStateChanged(MeetingState meetingState)
     {
-        Toast.Show($"<color=yellow>MeetingStateChanged: </color> {obj}", 2f, ToastPosition.TopCenter);
-        Debug.Log($"MeetingStateChanged: {obj}");
+        Toast.Show($"<color=yellow>MeetingStateChanged: </color> {meetingState}", 2f, ToastPosition.TopCenter);
+        Debug.Log($"MeetingStateChanged: {meetingState}");
     }
 
     public void JoinMeeting()
@@ -168,7 +195,7 @@ public class GameManager : MonoBehaviour
 
         try
         {
-            meeting.Join(_token, _meetingIdInputField.text, "User", true, false);
+            meeting.Join(_token, _meetingIdInputField.text, "User", true, true);
         }
         catch (Exception ex)
         {
@@ -194,6 +221,12 @@ public class GameManager : MonoBehaviour
         meeting?.Leave();
     }
 
+    public void GetAudioDevices()
+    {
+        OnFetchAudioDevice(new string[] { "vishal", "narola", "jemit", "savaliya" });
+        meeting?.GetAudioDevices();
+    }
+
     private void OnApplicationPause(bool pause)
     {
         if (_participantList.Count > 1)
@@ -215,12 +248,12 @@ public class GameManager : MonoBehaviour
                 {
                     case true:
                         {
-                            participant.PauseAudio();
+                            participant.PauseStream(StreamKind.AUDIO);
                             break;
                         }
                     case false:
                         {
-                            participant.ResumeAudio();
+                            participant.ResumeStream(StreamKind.AUDIO);
                             break;
                         }
                 }
@@ -240,12 +273,12 @@ public class GameManager : MonoBehaviour
                 {
                     case true:
                         {
-                            participant.PauseVideo();
+                            participant.PauseStream(StreamKind.VIDEO);
                             break;
                         }
                     case false:
                         {
-                            participant.ResumeVideo();
+                            participant.ResumeStream(StreamKind.VIDEO);
                             break;
                         }
                 }
@@ -301,9 +334,84 @@ public class GameManager : MonoBehaviour
                 callbacks.PermissionDeniedAndDontAskAgain += OnPermissionDeniedAndDontAskAgain;
                 Permission.RequestUserPermissions(new string[] { Permission.Microphone, Permission.Camera }, callbacks);
             }
+
+            CheckAndRequestBluetoothPermissions();
         }
 
     }
+    public void CheckAndRequestBluetoothPermissions()
+    {
+        if (Application.platform == RuntimePlatform.Android)
+        {
+            string BluetoothConnectPermission = "android.permission.BLUETOOTH_CONNECT";
+            if (AndroidVersion() >= 31) // Android 12+
+            {
+                if (!Permission.HasUserAuthorizedPermission(BluetoothConnectPermission))
+                {
+                    Permission.RequestUserPermission(BluetoothConnectPermission);
+                }
+                else
+                {
+                    Debug.Log("Bluetooth permission already granted.");
+                }
+            }
+            else
+            {
+                Debug.Log("No runtime permission needed for Bluetooth below Android 12.");
+            }
+        }
+        else
+            Debug.Log("Bluetooth permission check skipped (not Android device).");
+    }
 
+    private int AndroidVersion()
+    {
+        if (Application.platform == RuntimePlatform.Android)
+        {
+            using (var version = new AndroidJavaClass("android.os.Build$VERSION"))
+            {
+                return version.GetStatic<int>("SDK_INT");
+            }
+        }
 
+        return 0;
+    }
+
+    #region Get Devices
+    [Header("=== Get Devices ===")]
+    [SerializeField] private DeviceCloneController devicePrefab;
+    [SerializeField] private Transform deviceCloneContent;
+    [SerializeField] private GameObject devicesContentPanel;
+    private List<DeviceCloneController> devicesList = new List<DeviceCloneController>();
+    private void OnFetchAudioDevice(string[] devices)
+    {
+        devicesList.ForEach(device => Destroy(device.gameObject));
+        devicesList.Clear();
+      
+        for (int i = 0; i < devices.Length; i++)
+        {
+            DeviceCloneController deviceClone = Instantiate(devicePrefab, deviceCloneContent);
+            devicesList.Add(deviceClone);
+            deviceClone.SetData(devices[i]);
+            string deviceName = devices[i];
+            deviceClone.button.onClick.AddListener(() =>
+            {
+                OnDeviceSelect(deviceName, deviceClone);
+            });
+        }
+        devicesContentPanel.SetActive(true);
+    }
+
+    public void OnDeviceSelect(string deviceName, DeviceCloneController deviceClone)
+    {
+        Debug.Log($"selected {deviceName}");
+        deviceClone.SelectDevice();
+        devicesContentPanel.SetActive(false);
+        // Optional: Handle value change
+        //Debug.Log("Dropdown value changed to: " + deviceDropdown.options[value].text);
+    }
+
+    #endregion
 }
+
+
